@@ -10,64 +10,41 @@ lastnames_col = person.lastname
 firstnames_col = person.firstnames
 
 # nr. of occurencies of last names
-counter = Counter(lastnames_col)
 counter_firstnames = Counter(firstnames_col)
-common_first = counter_firstnames.most_common(14000)
 common_firstnames = []
-for fn in common_first:
+for fn in counter_firstnames.most_common(14000):
     if isinstance(fn[0], str):
         common_firstnames.append(fn[0].lower())
 
-
-#counter.most_common(20)
-common_last = counter.most_common(4000)
+counter = Counter(lastnames_col)
 common_lastnames = []
-for fn in common_last:
+for fn in counter.most_common(4000):
     if isinstance(fn[0], str):
         common_lastnames.append(fn[0].lower())
 
-with open('unique_lastnames.json') as f:
-   firstnames = json.load(f)
-
-
-#words_lower = []
-#for w in counter.most_common(2500):
-#    print(w[0])
-#    if isinstance(w[0],str):
-#        words_lower.append(w[0].lower())
-
-#names = words_lower#['wilhelm', 'frederiksen','morkebla']#words_lower
+#with open('unique_lastnames.json') as f:
+#   firstnames = json.load(f)
 
 alternativSpellings = {}
 percentileThredshold = 0.6
-cutoffThreshold = 0.5
+cutoffThreshold = 0.75
 
-def recursiveNearMatcher(sentence, alternativSpellings, currentPercent, currentCutoff):
+def recursiveNearMatcher(sentence, alternativSpellings, namesCounter, stopWords, currentPercent, currentCutoff):
     matches = list()
 
+    if len(sentence)<15:
+        return matches
+
+    #Get the most common names based on currentPercent
     words_lower = []
-    for w in counter.most_common(int(5000*currentPercent)):
-        #print(w[0])
+    for w in namesCounter.most_common(int(len(namesCounter)*currentPercent)):
         if isinstance(w[0],str):
             words_lower.append(w[0].lower())
     names = words_lower
 
-    print("recursive with these settings. percent: %f, cutoff: %f" % (currentPercent, currentCutoff))
-    print("using %d names and %d alternative spellings" % (len(names), len(alternativSpellings)))
-    print("sentence %s" % sentence[0:100])
-
-    # found = False
-    # #print(sentence.split())
-    # for w in sentence.split():
-    #     if len(w)>3 and w in common_firstnames:
-    #         found = True
-    #         print("found first name %s" % w)
-    #         break
-    # #        break
-    
-    # if not found:
-    #     print("returning nothing %s" % sentence)
-    #     return list()
+    #print("recursive with these settings. percent: %f, cutoff: %f\nusing %d names and %d alternative spellings\nsentence %s" % (currentPercent, currentCutoff,len(names), len(alternativSpellings),sentence[0:50]))
+   # print("using %d names and %d alternative spellings" % (len(names), len(alternativSpellings)))
+   # print("sentence %s" % sentence[0:50])
 
     while len(matches) == 0 and (currentPercent < percentileThredshold or currentCutoff > cutoffThreshold) and currentCutoff>0 and currentPercent<1:
         #print("HER!!!!!!!!!!!!!!!!! %d,%f,%f" % (len(matches), currentPercent, currentCutoff))
@@ -75,28 +52,28 @@ def recursiveNearMatcher(sentence, alternativSpellings, currentPercent, currentC
             word = word.lower()
             word = word.replace(',','').replace('.','')
 
-            if len(word)<4 or (word in common_firstnames):
+            if len(word)<4 or (word in stopWords):
                 #print("short or firstname found")
                 #print(word)
                 continue
 
             #Exact match
             if word in names:
-                print("exact match: %s" % word)
-                matches.append({"match": word, "confidence": 1-currentPercent})
+                print("\rexact match: %s" % word, end ="")
+                matches.append({"match": word, "confidence": 1-currentPercent, "sentence": sentence})
                 break
 
             #Exact match, alternative spellings
             if word in alternativSpellings:
-                print("alternative spelling match: %s" % word)
-                matches.append({"match": alternativSpellings[word], "confidence": 1-currentPercent-0.2})
+                print("\ralternative spelling match: %s" % word, end =" ")
+                matches.append({"match": alternativSpellings[word], "confidence": 1-currentPercent-0.2, "sentence": sentence})
                 break
             
             #Close match
             closeMatches = difflib.get_close_matches(word, names,cutoff=currentCutoff)
             if len(closeMatches) > 0:
-                print("close match: %s" % closeMatches[0])
-                matches.append({"match": closeMatches[0], "confidence": currentCutoff*(1-currentPercent)})
+                print("\rclose match: %s" % closeMatches[0], end =" ")
+                matches.append({"match": closeMatches[0], "confidence": currentCutoff*(1-currentPercent), "sentence": sentence})
                 #Add word to alternative spellings if unknown
                 if closeMatches[0] not in common_firstnames and closeMatches[0] not in common_lastnames:
                     alternativSpellings[closeMatches[0]] = word
@@ -104,12 +81,12 @@ def recursiveNearMatcher(sentence, alternativSpellings, currentPercent, currentC
                 break
         
         
+        #If no matches, reduce thresholds
         currentCutoff = currentCutoff-0.1
         currentPercent = currentPercent+0.1
         
-        #No matches, reduced thresholds
         if len(matches) == 0:
-            matches = recursiveNearMatcher(sentence, alternativSpellings, currentPercent, currentCutoff)
+            matches = recursiveNearMatcher(sentence, alternativSpellings, namesCounter, stopWords, currentPercent, currentCutoff)
             
            
     return matches
@@ -122,7 +99,7 @@ try:
         curMatches = list()
         i = i+1
         print("current line %d" % i)
-        curMatches = recursiveNearMatcher(l, alternativSpellings, 0.3, 0.95)
+        curMatches = recursiveNearMatcher(l, alternativSpellings, counter, common_firstnames, 0.3, 0.95)
         if len(curMatches)>0:
             matches.append({"line": i, "matches" : curMatches})
 except KeyboardInterrupt as k:
@@ -134,13 +111,37 @@ finally:
     with open('matches.json', 'w') as outfile:
         json.dump(matches, outfile)
 
-    print("%d matches found" % len(matches))
+    print("\r%d matches found" % len(matches),end="")
     for m in matches:
         #if m['matches'][0]['confidence'] > 0.9:
             print(m)
 
-    print(alternativSpellings)    
+    print(alternativSpellings,end="")    
+    print("found %d matches" % len(matches),end="")
 
+completeMatches = list()
+persons = list()
+try:
+    for m in matches:
+        curMatches = list()
+        i = i+1
+        print("\rcurrent line %d" % i,end="")
+        curMatches = recursiveNearMatcher(m['matches'][0]['sentence'], alternativSpellings, counter_firstnames, common_lastnames, 0.3, 0.95)
+        if len(curMatches)>0:
+            completeMatches.append({"line": i, "matches" : curMatches})
+            persons.append({
+                'line': m['line'],
+                'matchLastname': m['matches'][0]['match'],
+                'lastnameConf': m['matches'][0]['confidence'],
+                'matchFirstname': curMatches[0]['match'],
+                'firstnameConf': curMatches[0]['confidence']
+            })
+except KeyboardInterrupt as k:
+    pass
+finally:
+    for m in persons:
+        #if m['matches'][0]['confidence'] > 0.9:
+        print(m)
 
         
         
