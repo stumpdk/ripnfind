@@ -59,20 +59,20 @@ def recursiveNearMatcher(sentence, alternativSpellings, namesCounter, stopWords,
 
             #Exact match
             if word in names:
-                print("\rexact match: %s" % word, end ="")
+                print("exact match: %s" % word, end ="")
                 matches.append({"match": word, "confidence": 1-currentPercent, "sentence": sentence})
                 break
 
             #Exact match, alternative spellings
             if word in alternativSpellings:
-                print("\ralternative spelling match: %s" % word, end =" ")
+                print("alternative spelling match: %s" % word, end =" ")
                 matches.append({"match": alternativSpellings[word], "confidence": 1-currentPercent-0.2, "sentence": sentence})
                 break
             
             #Close match
             closeMatches = difflib.get_close_matches(word, names,cutoff=currentCutoff)
             if len(closeMatches) > 0:
-                print("\rclose match: %s" % closeMatches[0], end =" ")
+                print("close match: %s" % closeMatches[0], end =" ")
                 matches.append({"match": closeMatches[0], "confidence": currentCutoff*(1-currentPercent), "sentence": sentence})
                 #Add word to alternative spellings if unknown
                 if closeMatches[0] not in common_firstnames and closeMatches[0] not in common_lastnames:
@@ -111,7 +111,7 @@ finally:
     with open('matches.json', 'w') as outfile:
         json.dump(matches, outfile)
 
-    print("\r%d matches found" % len(matches),end="")
+    print("%d matches found" % len(matches),end="")
     for m in matches:
         #if m['matches'][0]['confidence'] > 0.9:
             print(m)
@@ -125,7 +125,7 @@ try:
     for m in matches:
         curMatches = list()
         i = i+1
-        print("\rcurrent line %d" % i,end="")
+        print("current line %d" % i,end="")
         curMatches = recursiveNearMatcher(m['matches'][0]['sentence'], alternativSpellings, counter_firstnames, common_lastnames, 0.3, 0.95)
         if len(curMatches)>0:
             completeMatches.append({"line": i, "matches" : curMatches})
